@@ -5,6 +5,21 @@ import Link from "next/link";
 
 type Producto = { id: number; nombre: string; sku: string; unidad: string };
 
+const UNIDADES = [
+  { valor: "pieza",     icono: "📦", label: "Pieza",      ejemplo: "ej: 12 piezas" },
+  { valor: "kg",        icono: "⚖️",  label: "Kilogramo",  ejemplo: "ej: 5.5 kg" },
+  { valor: "g",         icono: "⚖️",  label: "Gramo",      ejemplo: "ej: 500 g" },
+  { valor: "litro",     icono: "🧴", label: "Litro",      ejemplo: "ej: 3 litros" },
+  { valor: "ml",        icono: "💧", label: "Mililitro",  ejemplo: "ej: 355 ml" },
+  { valor: "caja",      icono: "🗃️",  label: "Caja",       ejemplo: "ej: 2 cajas" },
+  { valor: "bolsa",     icono: "🛍️", label: "Bolsa",      ejemplo: "ej: 6 bolsas" },
+  { valor: "lata",      icono: "🥫", label: "Lata",       ejemplo: "ej: 24 latas" },
+  { valor: "paquete",   icono: "📫", label: "Paquete",    ejemplo: "ej: 10 paquetes" },
+  { valor: "botella",   icono: "🍶", label: "Botella",    ejemplo: "ej: 6 botellas" },
+  { valor: "porcion",   icono: "🍽️", label: "Porción",    ejemplo: "ej: 8 porciones" },
+  { valor: "docena",    icono: "🥚", label: "Docena",     ejemplo: "ej: 2 docenas" },
+];
+
 export default function IngresoPage() {
   const router = useRouter();
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -16,6 +31,7 @@ export default function IngresoPage() {
   });
   const [nuevoProducto, setNuevoProducto] = useState({ nombre: "", sku: "", unidad: "pieza" });
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
+  const [mostrarUnidades, setMostrarUnidades] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState(false);
@@ -25,6 +41,8 @@ export default function IngresoPage() {
       .then((r) => { if (r.status === 401) router.push("/login"); return r.json(); })
       .then((d) => setProductos(d.productos || []));
   }, [router]);
+
+  const unidadSeleccionada = UNIDADES.find(u => u.valor === nuevoProducto.unidad) || UNIDADES[0];
 
   const crearProducto = async () => {
     if (!nuevoProducto.nombre) return;
@@ -68,6 +86,10 @@ export default function IngresoPage() {
     }
   };
 
+  // Producto seleccionado actualmente
+  const productoActual = productos.find(p => String(p.id) === form.producto_id);
+  const unidadActual = UNIDADES.find(u => u.valor === productoActual?.unidad);
+
   const hoy = new Date().toISOString().split("T")[0];
 
   if (exito) {
@@ -95,7 +117,8 @@ export default function IngresoPage() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-5">
-        {/* Producto */}
+
+        {/* Paso 1: Producto */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <h2 className="font-medium text-gray-900 mb-4">1. Producto</h2>
 
@@ -107,12 +130,27 @@ export default function IngresoPage() {
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 bg-white"
               >
                 <option value="">— Selecciona un producto —</option>
-                {productos.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre} {p.sku ? `(${p.sku})` : ""}
-                  </option>
-                ))}
+                {productos.map((p) => {
+                  const u = UNIDADES.find(u => u.valor === p.unidad);
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {u?.icono} {p.nombre} {p.sku ? `(${p.sku})` : ""} · {u?.label || p.unidad}
+                    </option>
+                  );
+                })}
               </select>
+
+              {/* Muestra la unidad del producto seleccionado */}
+              {productoActual && (
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-4 py-3">
+                  <span className="text-xl">{unidadActual?.icono}</span>
+                  <div>
+                    <p className="text-xs text-gray-400">Unidad de medida</p>
+                    <p className="text-sm font-medium text-gray-700">{unidadActual?.label || productoActual.unidad}</p>
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={() => setMostrarNuevo(true)}
                 className="text-sm text-gray-500 hover:text-gray-900 underline underline-offset-4"
@@ -121,32 +159,68 @@ export default function IngresoPage() {
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-500">Nuevo producto</p>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500 font-medium">Nuevo producto</p>
+
               <input
                 placeholder="Nombre del producto *"
                 value={nuevoProducto.nombre}
                 onChange={(e) => setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
               />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  placeholder="SKU / Código (opcional)"
-                  value={nuevoProducto.sku}
-                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, sku: e.target.value })}
-                  className="border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                />
-                <select
-                  value={nuevoProducto.unidad}
-                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, unidad: e.target.value })}
-                  className="border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 bg-white"
+
+              <input
+                placeholder="SKU / Código de barras (opcional)"
+                value={nuevoProducto.sku}
+                onChange={(e) => setNuevoProducto({ ...nuevoProducto, sku: e.target.value })}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+              />
+
+              {/* Selector visual de unidades */}
+              <div>
+                <p className="text-sm text-gray-600 mb-2">Unidad de medida *</p>
+
+                {/* Botón que muestra la selección actual */}
+                <button
+                  onClick={() => setMostrarUnidades(!mostrarUnidades)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-left flex items-center justify-between hover:border-gray-400 transition-colors"
                 >
-                  {["pieza", "kg", "litro", "caja", "bolsa", "lata"].map((u) => (
-                    <option key={u}>{u}</option>
-                  ))}
-                </select>
+                  <span className="flex items-center gap-2">
+                    <span className="text-lg">{unidadSeleccionada.icono}</span>
+                    <span className="font-medium text-gray-900">{unidadSeleccionada.label}</span>
+                    <span className="text-gray-400">{unidadSeleccionada.ejemplo}</span>
+                  </span>
+                  <span className="text-gray-400">{mostrarUnidades ? "▲" : "▼"}</span>
+                </button>
+
+                {/* Grid de opciones */}
+                {mostrarUnidades && (
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {UNIDADES.map((u) => (
+                      <button
+                        key={u.valor}
+                        onClick={() => {
+                          setNuevoProducto({ ...nuevoProducto, unidad: u.valor });
+                          setMostrarUnidades(false);
+                        }}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all ${
+                          nuevoProducto.unidad === u.valor
+                            ? "border-gray-900 bg-gray-900 text-white"
+                            : "border-gray-200 hover:border-gray-400 text-gray-700"
+                        }`}
+                      >
+                        <span className="text-xl">{u.icono}</span>
+                        <span className="text-xs font-medium">{u.label}</span>
+                        <span className={`text-xs ${nuevoProducto.unidad === u.valor ? "text-gray-300" : "text-gray-400"}`}>
+                          {u.ejemplo}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="flex gap-2">
+
+              <div className="flex gap-2 pt-1">
                 <button
                   onClick={crearProducto}
                   className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-gray-800"
@@ -154,7 +228,7 @@ export default function IngresoPage() {
                   Guardar producto
                 </button>
                 <button
-                  onClick={() => setMostrarNuevo(false)}
+                  onClick={() => { setMostrarNuevo(false); setMostrarUnidades(false); }}
                   className="px-4 border border-gray-200 rounded-xl text-sm text-gray-500 hover:bg-gray-50"
                 >
                   Cancelar
@@ -164,22 +238,38 @@ export default function IngresoPage() {
           )}
         </div>
 
-        {/* Cantidad y fecha */}
+        {/* Paso 2: Cantidad y fecha */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <h2 className="font-medium text-gray-900 mb-4">2. Cantidad y caducidad</h2>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Cantidad *</label>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="Ej: 12"
-                value={form.cantidad}
-                onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-              />
+              <label className="block text-sm text-gray-600 mb-1">
+                Cantidad
+                {productoActual && (
+                  <span className="ml-1 text-gray-400">
+                    (en {unidadActual?.label.toLowerCase() || productoActual.unidad}s)
+                  </span>
+                )}
+                {" "}*
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="Ej: 12"
+                  value={form.cantidad}
+                  onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 pr-16"
+                />
+                {productoActual && (
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">
+                    {unidadActual?.icono} {productoActual.unidad}
+                  </span>
+                )}
+              </div>
             </div>
+
             <div>
               <label className="block text-sm text-gray-600 mb-1">Fecha de caducidad *</label>
               <input
@@ -193,10 +283,11 @@ export default function IngresoPage() {
           </div>
         </div>
 
-        {/* Notas */}
+        {/* Paso 3: Notas */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <h2 className="font-medium text-gray-900 mb-4">
-            3. Notas <span className="text-gray-400 font-normal text-sm">(opcional)</span>
+            3. Notas{" "}
+            <span className="text-gray-400 font-normal text-sm">(opcional)</span>
           </h2>
           <textarea
             rows={3}
