@@ -2,6 +2,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const EscanerCodigo = dynamic(() => import("@/components/EscanerCodigo"), { ssr: false });
 
 type Producto = { id: number; nombre: string; sku: string; unidad: string };
 
@@ -39,6 +42,21 @@ export default function ProductosPage() {
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [confirmEliminar, setConfirmEliminar] = useState<number | null>(null);
+  const [mostrarEscaner, setMostrarEscaner] = useState(false);
+  const [skuEscaneado, setSkuEscaneado] = useState("");
+
+  const handleCodigoEscaneado = (codigo: string) => {
+    setMostrarEscaner(false);
+    setSkuEscaneado(codigo);
+    // Si ya existe ese SKU en la lista, no hacemos nada
+    const existente = productos.find(p => p.sku === codigo);
+    if (!existente) {
+      // Pre-llenar el editForm con el SKU escaneado para un producto nuevo
+      setEditandoId(-1); // -1 = modo nuevo producto desde escáner
+      setEditForm({ nombre: "", sku: codigo, unidad: "pieza" });
+      setTipoUnidad("conteo");
+    }
+  };
 
   const cargar = () => {
     fetch("/api/productos")
@@ -97,9 +115,18 @@ export default function ProductosPage() {
             <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Volver</Link>
             <h1 className="font-semibold text-gray-900">Mis productos</h1>
           </div>
-          <Link href="/ingreso" className="text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">
-            + Registrar lote
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMostrarEscaner(true)}
+              className="text-sm border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 text-gray-600 transition-colors"
+              title="Buscar por código de barras"
+            >
+              📷
+            </button>
+            <Link href="/ingreso" className="text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">
+              + Registrar lote
+            </Link>
+          </div>
         </div>
       </header>
 

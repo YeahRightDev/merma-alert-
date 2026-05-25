@@ -2,6 +2,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const EscanerCodigo = dynamic(() => import("@/components/EscanerCodigo"), { ssr: false });
 
 type Producto = { id: number; nombre: string; sku: string; unidad: string };
 
@@ -38,6 +41,7 @@ export default function IngresoPage() {
   const [nuevoProducto, setNuevoProducto] = useState({ nombre: "", sku: "", unidad: "pieza" });
   const [tipoUnidad, setTipoUnidad] = useState<"conteo" | "medida">("conteo");
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
+  const [mostrarEscaner, setMostrarEscaner] = useState(false);
   const [mostrarUnidades, setMostrarUnidades] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -52,6 +56,19 @@ export default function IngresoPage() {
   const unidadInfo = TODAS_UNIDADES.find(u => u.valor === nuevoProducto.unidad) || UNIDADES_CONTEO[0];
   const productoActual = productos.find(p => String(p.id) === form.producto_id);
   const unidadActual = TODAS_UNIDADES.find(u => u.valor === productoActual?.unidad);
+
+  const handleCodigoDetectado = (codigo: string) => {
+    setMostrarEscaner(false);
+    // Buscar si el producto ya existe por SKU
+    const existente = productos.find(p => p.sku === codigo);
+    if (existente) {
+      setForm({ ...form, producto_id: String(existente.id) });
+    } else {
+      // Si no existe, pre-llenar el SKU en el formulario de nuevo producto
+      setNuevoProducto({ ...nuevoProducto, sku: codigo });
+      setMostrarNuevo(true);
+    }
+  };
 
   const crearProducto = async () => {
     if (!nuevoProducto.nombre) return;
@@ -157,12 +174,21 @@ export default function IngresoPage() {
                 </div>
               )}
 
-              <button
-                onClick={() => setMostrarNuevo(true)}
-                className="text-sm text-gray-500 hover:text-gray-900 underline underline-offset-4"
-              >
-                + Agregar producto nuevo
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setMostrarNuevo(true)}
+                  className="text-sm text-gray-500 hover:text-gray-900 underline underline-offset-4"
+                >
+                  + Agregar producto nuevo
+                </button>
+                <span className="text-gray-200">|</span>
+                <button
+                  onClick={() => setMostrarEscaner(true)}
+                  className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1"
+                >
+                  📷 Escanear código
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -338,6 +364,14 @@ export default function IngresoPage() {
           {loading ? "Guardando..." : "✓ Registrar lote"}
         </button>
       </main>
+
+      {/* Escáner de código de barras */}
+      {mostrarEscaner && (
+        <EscanerCodigo
+          onDetected={handleCodigoDetectado}
+          onCerrar={() => setMostrarEscaner(false)}
+        />
+      )}
     </div>
   );
 }
