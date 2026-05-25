@@ -57,17 +57,37 @@ export default function IngresoPage() {
   const productoActual = productos.find(p => String(p.id) === form.producto_id);
   const unidadActual = TODAS_UNIDADES.find(u => u.valor === productoActual?.unidad);
 
-  const handleCodigoDetectado = (codigo: string) => {
+  const [buscandoProducto, setBuscandoProducto] = useState(false);
+  const [productoEncontrado, setProductoEncontrado] = useState<{nombre:string;marca:string|null;imagen:string|null}|null>(null);
+
+  const handleCodigoDetectado = async (codigo: string) => {
     setMostrarEscaner(false);
-    // Buscar si el producto ya existe por SKU
+
+    // 1. ¿Ya existe en mis productos?
     const existente = productos.find(p => p.sku === codigo);
     if (existente) {
-      setForm({ ...form, producto_id: String(existente.id) });
-    } else {
-      // Si no existe, pre-llenar el SKU en el formulario de nuevo producto
-      setNuevoProducto({ ...nuevoProducto, sku: codigo });
-      setMostrarNuevo(true);
+      setForm(f => ({ ...f, producto_id: String(existente.id) }));
+      return;
     }
+
+    // 2. Buscar en base de datos global
+    setBuscandoProducto(true);
+    setProductoEncontrado(null);
+    setMostrarNuevo(true);
+    setNuevoProducto(p => ({ ...p, sku: codigo }));
+
+    try {
+      const res = await fetch(`/api/barcode/${codigo}`);
+      const data = await res.json();
+      if (data.encontrado) {
+        const nombreCompleto = data.marca
+          ? `${data.nombre} ${data.marca}`.trim()
+          : data.nombre;
+        setNuevoProducto(p => ({ ...p, nombre: nombreCompleto, sku: codigo }));
+        setProductoEncontrado({ nombre: data.nombre, marca: data.marca, imagen: data.imagen });
+      }
+    } catch {}
+    setBuscandoProducto(false);
   };
 
   const crearProducto = async () => {
@@ -193,6 +213,31 @@ export default function IngresoPage() {
           ) : (
             <div className="space-y-4">
               <p className="text-sm font-medium text-gray-700">Nuevo producto</p>
+
+              {/* Estado: buscando en base de datos global */}
+              {buscandoProducto && (
+                <div className="flex items-center gap-3 bg-blue-50 rounded-xl px-4 py-3">
+                  <div className="animate-spin text-lg">🔍</div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-700">Buscando producto...</p>
+                    <p className="text-xs text-blue-500">Consultando 3 millones de productos</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Producto encontrado en base de datos */}
+              {productoEncontrado && !buscandoProducto && (
+                <div className="flex items-center gap-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+                  {productoEncontrado.imagen && (
+                    <img src={productoEncontrado.imagen} alt="" className="w-12 h-12 object-contain rounded-lg bg-white border border-green-100 flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-green-600 font-medium">✓ Producto encontrado</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">{productoEncontrado.nombre}</p>
+                    {productoEncontrado.marca && <p className="text-xs text-gray-500">{productoEncontrado.marca}</p>}
+                  </div>
+                </div>
+              )}
 
               <input
                 placeholder="Nombre del producto *"
