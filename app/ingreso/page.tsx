@@ -5,20 +5,26 @@ import Link from "next/link";
 
 type Producto = { id: number; nombre: string; sku: string; unidad: string };
 
-const UNIDADES = [
-  { valor: "pieza",     icono: "📦", label: "Pieza",      ejemplo: "ej: 12 piezas" },
-  { valor: "kg",        icono: "⚖️",  label: "Kilogramo",  ejemplo: "ej: 5.5 kg" },
-  { valor: "g",         icono: "⚖️",  label: "Gramo",      ejemplo: "ej: 500 g" },
-  { valor: "litro",     icono: "🧴", label: "Litro",      ejemplo: "ej: 3 litros" },
-  { valor: "ml",        icono: "💧", label: "Mililitro",  ejemplo: "ej: 355 ml" },
-  { valor: "caja",      icono: "🗃️",  label: "Caja",       ejemplo: "ej: 2 cajas" },
-  { valor: "bolsa",     icono: "🛍️", label: "Bolsa",      ejemplo: "ej: 6 bolsas" },
-  { valor: "lata",      icono: "🥫", label: "Lata",       ejemplo: "ej: 24 latas" },
-  { valor: "paquete",   icono: "📫", label: "Paquete",    ejemplo: "ej: 10 paquetes" },
-  { valor: "botella",   icono: "🍶", label: "Botella",    ejemplo: "ej: 6 botellas" },
-  { valor: "porcion",   icono: "🍽️", label: "Porción",    ejemplo: "ej: 8 porciones" },
-  { valor: "docena",    icono: "🥚", label: "Docena",     ejemplo: "ej: 2 docenas" },
+const UNIDADES_MEDIDA = [
+  { valor: "kg",      icono: "⚖️",  label: "Kilogramos" },
+  { valor: "g",       icono: "⚖️",  label: "Gramos"     },
+  { valor: "litro",   icono: "🧴",  label: "Litros"     },
+  { valor: "ml",      icono: "💧",  label: "Mililitros" },
+  { valor: "metro",   icono: "📏",  label: "Metros"     },
 ];
+
+const UNIDADES_CONTEO = [
+  { valor: "pieza",    icono: "📦", label: "Piezas"   },
+  { valor: "caja",     icono: "🗃️", label: "Cajas"    },
+  { valor: "bolsa",    icono: "🛍️", label: "Bolsas"   },
+  { valor: "lata",     icono: "🥫", label: "Latas"    },
+  { valor: "paquete",  icono: "📫", label: "Paquetes" },
+  { valor: "botella",  icono: "🍶", label: "Botellas" },
+  { valor: "porcion",  icono: "🍽️", label: "Porciones"},
+  { valor: "docena",   icono: "🥚", label: "Docenas"  },
+];
+
+const TODAS_UNIDADES = [...UNIDADES_CONTEO, ...UNIDADES_MEDIDA];
 
 export default function IngresoPage() {
   const router = useRouter();
@@ -30,6 +36,7 @@ export default function IngresoPage() {
     notas: "",
   });
   const [nuevoProducto, setNuevoProducto] = useState({ nombre: "", sku: "", unidad: "pieza" });
+  const [tipoUnidad, setTipoUnidad] = useState<"conteo" | "medida">("conteo");
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
   const [mostrarUnidades, setMostrarUnidades] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,7 +49,9 @@ export default function IngresoPage() {
       .then((d) => setProductos(d.productos || []));
   }, [router]);
 
-  const unidadSeleccionada = UNIDADES.find(u => u.valor === nuevoProducto.unidad) || UNIDADES[0];
+  const unidadInfo = TODAS_UNIDADES.find(u => u.valor === nuevoProducto.unidad) || UNIDADES_CONTEO[0];
+  const productoActual = productos.find(p => String(p.id) === form.producto_id);
+  const unidadActual = TODAS_UNIDADES.find(u => u.valor === productoActual?.unidad);
 
   const crearProducto = async () => {
     if (!nuevoProducto.nombre) return;
@@ -56,7 +65,9 @@ export default function IngresoPage() {
       setProductos([...productos, data.producto]);
       setForm({ ...form, producto_id: String(data.producto.id) });
       setMostrarNuevo(false);
+      setMostrarUnidades(false);
       setNuevoProducto({ nombre: "", sku: "", unidad: "pieza" });
+      setTipoUnidad("conteo");
     }
   };
 
@@ -86,10 +97,6 @@ export default function IngresoPage() {
     }
   };
 
-  // Producto seleccionado actualmente
-  const productoActual = productos.find(p => String(p.id) === form.producto_id);
-  const unidadActual = UNIDADES.find(u => u.valor === productoActual?.unidad);
-
   const hoy = new Date().toISOString().split("T")[0];
 
   if (exito) {
@@ -104,14 +111,13 @@ export default function IngresoPage() {
     );
   }
 
+  const unidadesActivas = tipoUnidad === "conteo" ? UNIDADES_CONTEO : UNIDADES_MEDIDA;
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
-          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">
-            ← Volver
-          </Link>
+          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Volver</Link>
           <h1 className="font-semibold text-gray-900">Registrar lote</h1>
         </div>
       </header>
@@ -131,7 +137,7 @@ export default function IngresoPage() {
               >
                 <option value="">— Selecciona un producto —</option>
                 {productos.map((p) => {
-                  const u = UNIDADES.find(u => u.valor === p.unidad);
+                  const u = TODAS_UNIDADES.find(u => u.valor === p.unidad);
                   return (
                     <option key={p.id} value={p.id}>
                       {u?.icono} {p.nombre} {p.sku ? `(${p.sku})` : ""} · {u?.label || p.unidad}
@@ -140,12 +146,12 @@ export default function IngresoPage() {
                 })}
               </select>
 
-              {/* Muestra la unidad del producto seleccionado */}
+              {/* Badge de unidad del producto seleccionado */}
               {productoActual && (
-                <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-4 py-3">
-                  <span className="text-xl">{unidadActual?.icono}</span>
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-4 py-2.5">
+                  <span className="text-lg">{unidadActual?.icono}</span>
                   <div>
-                    <p className="text-xs text-gray-400">Unidad de medida</p>
+                    <p className="text-xs text-gray-400">Se mide en</p>
                     <p className="text-sm font-medium text-gray-700">{unidadActual?.label || productoActual.unidad}</p>
                   </div>
                 </div>
@@ -160,7 +166,7 @@ export default function IngresoPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              <p className="text-sm text-gray-500 font-medium">Nuevo producto</p>
+              <p className="text-sm font-medium text-gray-700">Nuevo producto</p>
 
               <input
                 placeholder="Nombre del producto *"
@@ -176,27 +182,54 @@ export default function IngresoPage() {
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
               />
 
-              {/* Selector visual de unidades */}
+              {/* Tipo de unidad */}
               <div>
-                <p className="text-sm text-gray-600 mb-2">Unidad de medida *</p>
+                <p className="text-sm text-gray-600 mb-2">¿Cómo se mide este producto?</p>
 
-                {/* Botón que muestra la selección actual */}
+                {/* Toggle conteo vs medida */}
+                <div className="flex bg-gray-100 rounded-xl p-1 mb-3">
+                  <button
+                    onClick={() => {
+                      setTipoUnidad("conteo");
+                      setNuevoProducto({ ...nuevoProducto, unidad: "pieza" });
+                      setMostrarUnidades(false);
+                    }}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                      tipoUnidad === "conteo" ? "bg-white shadow-sm text-gray-900" : "text-gray-500"
+                    }`}
+                  >
+                    📦 Por cantidad
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTipoUnidad("medida");
+                      setNuevoProducto({ ...nuevoProducto, unidad: "kg" });
+                      setMostrarUnidades(false);
+                    }}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                      tipoUnidad === "medida" ? "bg-white shadow-sm text-gray-900" : "text-gray-500"
+                    }`}
+                  >
+                    ⚖️ Por peso / volumen
+                  </button>
+                </div>
+
+                {/* Botón selector de unidad */}
                 <button
                   onClick={() => setMostrarUnidades(!mostrarUnidades)}
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-left flex items-center justify-between hover:border-gray-400 transition-colors"
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-lg">{unidadSeleccionada.icono}</span>
-                    <span className="font-medium text-gray-900">{unidadSeleccionada.label}</span>
-                    <span className="text-gray-400">{unidadSeleccionada.ejemplo}</span>
+                    <span className="text-lg">{unidadInfo.icono}</span>
+                    <span className="font-medium text-gray-900">{unidadInfo.label}</span>
                   </span>
-                  <span className="text-gray-400">{mostrarUnidades ? "▲" : "▼"}</span>
+                  <span className="text-gray-400 text-xs">{mostrarUnidades ? "▲ cerrar" : "▼ cambiar"}</span>
                 </button>
 
                 {/* Grid de opciones */}
                 {mostrarUnidades && (
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    {UNIDADES.map((u) => (
+                  <div className={`mt-2 grid gap-2 ${tipoUnidad === "conteo" ? "grid-cols-4" : "grid-cols-3"}`}>
+                    {unidadesActivas.map((u) => (
                       <button
                         key={u.valor}
                         onClick={() => {
@@ -210,10 +243,7 @@ export default function IngresoPage() {
                         }`}
                       >
                         <span className="text-xl">{u.icono}</span>
-                        <span className="text-xs font-medium">{u.label}</span>
-                        <span className={`text-xs ${nuevoProducto.unidad === u.valor ? "text-gray-300" : "text-gray-400"}`}>
-                          {u.ejemplo}
-                        </span>
+                        <span className="text-xs font-medium leading-tight">{u.label}</span>
                       </button>
                     ))}
                   </div>
@@ -244,13 +274,11 @@ export default function IngresoPage() {
           <div className="space-y-3">
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Cantidad
-                {productoActual && (
-                  <span className="ml-1 text-gray-400">
-                    (en {unidadActual?.label.toLowerCase() || productoActual.unidad}s)
-                  </span>
-                )}
-                {" "}*
+                {unidadActual
+                  ? UNIDADES_MEDIDA.find(u => u.valor === unidadActual.valor)
+                    ? `Cantidad en ${unidadActual.label.toLowerCase()}`
+                    : `Número de ${unidadActual.label.toLowerCase()}`
+                  : "Cantidad"}{" "}*
               </label>
               <div className="relative">
                 <input
@@ -260,7 +288,7 @@ export default function IngresoPage() {
                   placeholder="Ej: 12"
                   value={form.cantidad}
                   onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 pr-16"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 pr-20"
                 />
                 {productoActual && (
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">
@@ -285,13 +313,13 @@ export default function IngresoPage() {
 
         {/* Paso 3: Notas */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <h2 className="font-medium text-gray-900 mb-4">
-            3. Notas{" "}
+          <h2 className="font-medium text-gray-900 mb-1">3. Notas{" "}
             <span className="text-gray-400 font-normal text-sm">(opcional)</span>
           </h2>
+          <p className="text-xs text-gray-400 mb-3">Proveedor, condiciones de almacenaje, observaciones...</p>
           <textarea
             rows={3}
-            placeholder="Ej: Lote recibido del proveedor ABC, refrigeración necesaria"
+            placeholder='Ej: "Lote recibido de Lácteos del Norte, mantener refrigerado"'
             value={form.notas}
             onChange={(e) => setForm({ ...form, notas: e.target.value })}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 resize-none"
