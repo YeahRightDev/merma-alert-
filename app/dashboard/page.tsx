@@ -103,10 +103,16 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3">
             <Link
+              href="/productos"
+              className="text-gray-500 hover:text-gray-900 text-sm border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              🗂️ Productos
+            </Link>
+            <Link
               href="/ingreso"
               className="bg-gray-900 text-white text-sm px-4 py-2 rounded-xl hover:bg-gray-800 transition-colors"
             >
-              + Registrar lote
+              + Lote
             </Link>
             <button onClick={logout} className="text-gray-400 hover:text-gray-600 text-sm">
               Salir
