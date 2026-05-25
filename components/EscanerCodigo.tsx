@@ -8,53 +8,91 @@ type Props = {
 
 export default function EscanerCodigo({ onDetected, onCerrar }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [error, setError] = useState("");
-  const [escaneando, setEscaneando] = useState(false);
-  const readerRef = useRef<any>(null);
+  const [estado, setEstado] = useState<"cargando" | "escaneando" | "error">("cargando");
+  const [errorMsg, setErrorMsg] = useState("");
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number>(0);
 
   useEffect(() => {
     let activo = true;
 
     const iniciar = async () => {
       try {
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
-        const reader = new BrowserMultiFormatReader();
-        readerRef.current = reader;
-
-        const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-        if (devices.length === 0) {
-          setError("No se encontró cámara en este dispositivo.");
-          return;
+        // Solicitar cámara — preferir trasera en móvil
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+        });
+        if (!activo) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
         }
 
-        // Preferir cámara trasera en móvil
-        const camara =
-          devices.find((d) => d.label.toLowerCase().includes("back")) ||
-          devices.find((d) => d.label.toLowerCase().includes("rear")) ||
-          devices[devices.length - 1];
+        // Cargar ZXing desde CDN (sin instalar nada)
+        await new Promise<void>((resolve, reject) => {
+          if ((window as any).ZXing) { resolve(); return; }
+          const script = document.createElement("script");
+          script.src = "https://unpkg.com/@zxing/library@0.19.2/umd/index.min.js";
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("No se pudo cargar el escáner"));
+          document.head.appendChild(script);
+        });
 
-        setEscaneando(true);
+        if (!activo) return;
+        setEstado("escaneando");
 
-        await reader.decodeFromVideoDevice(
-          camara.deviceId,
-          videoRef.current!,
-          (result, err) => {
-            if (!activo) return;
-            if (result) {
-              const codigo = result.getText();
-              onDetected(codigo);
+        const ZXing = (window as any).ZXing;
+        const hints = new Map();
+        const formats = [
+          ZXing.BarcodeFormat.EAN_13,
+          ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.UPC_A,
+          ZXing.BarcodeFormat.CODE_128,
+          ZXing.BarcodeFormat.QR_CODE,
+          ZXing.BarcodeFormat.DATA_MATRIX,
+        ];
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+        const reader = new ZXing.MultiFormatReader();
+        reader.setHints(hints);
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d")!;
+
+        const escanear = () => {
+          if (!activo || !videoRef.current) return;
+          const v = videoRef.current;
+          if (v.readyState === v.HAVE_ENOUGH_DATA) {
+            canvas.width = v.videoWidth;
+            canvas.height = v.videoHeight;
+            ctx.drawImage(v, 0, 0);
+            try {
+              const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const luminance = new ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
+              const binary = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminance));
+              const result = reader.decode(binary);
+              if (result && activo) {
+                onDetected(result.getText());
+                return;
+              }
+            } catch {
+              // Sin código en este frame — normal, seguir escaneando
             }
-            // Ignoramos errores de "no encontrado en frame" — son normales
           }
-        );
+          rafRef.current = requestAnimationFrame(escanear);
+        };
+        rafRef.current = requestAnimationFrame(escanear);
+
       } catch (e: any) {
-        if (activo) {
-          if (e?.name === "NotAllowedError") {
-            setError("Permiso de cámara denegado. Actívalo en la configuración de tu navegador.");
-          } else {
-            setError("No se pudo acceder a la cámara. Intenta desde Chrome o Safari.");
-          }
+        if (!activo) return;
+        if (e?.name === "NotAllowedError") {
+          setErrorMsg("Permiso de cámara denegado. Actívalo en la configuración de tu navegador.");
+        } else if (e?.message?.includes("cargar")) {
+          setErrorMsg("Sin conexión para cargar el escáner. Intenta de nuevo.");
+        } else {
+          setErrorMsg("No se pudo acceder a la cámara.");
         }
+        setEstado("error");
       }
     };
 
@@ -62,7 +100,8 @@ export default function EscanerCodigo({ onDetected, onCerrar }: Props) {
 
     return () => {
       activo = false;
-      readerRef.current?.reset();
+      cancelAnimationFrame(rafRef.current);
+      streamRef.current?.getTracks().forEach(t => t.stop());
     };
   }, []);
 
@@ -70,7 +109,6 @@ export default function EscanerCodigo({ onDetected, onCerrar }: Props) {
     <div className="fixed inset-0 z-50 bg-black bg-opacity-80 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl overflow-hidden w-full max-w-sm">
 
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <div>
             <h3 className="font-medium text-gray-900">Escanear código de barras</h3>
@@ -78,39 +116,28 @@ export default function EscanerCodigo({ onDetected, onCerrar }: Props) {
           </div>
           <button
             onClick={onCerrar}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            ✕
-          </button>
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
+          >✕</button>
         </div>
 
-        {/* Visor de cámara */}
         <div className="relative bg-black" style={{ aspectRatio: "4/3" }}>
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            playsInline
-            muted
-          />
+          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
 
           {/* Marco de enfoque */}
-          {escaneando && !error && (
+          {estado === "escaneando" && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="relative w-48 h-32">
-                {/* Esquinas del marco */}
-                <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-white rounded-tl-sm" />
-                <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-white rounded-tr-sm" />
-                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-white rounded-bl-sm" />
-                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-white rounded-br-sm" />
-                {/* Línea de escaneo animada */}
-                <div className="absolute left-1 right-1 h-0.5 bg-red-400 opacity-80 animate-bounce" style={{ top: "50%" }} />
+              <div className="relative w-52 h-36">
+                <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-white rounded-tl" />
+                <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-white rounded-tr" />
+                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-white rounded-bl" />
+                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-white rounded-br" />
+                <div className="absolute left-2 right-2 h-0.5 bg-red-400 opacity-80 animate-bounce" style={{ top: "50%" }} />
               </div>
             </div>
           )}
 
-          {/* Spinner mientras carga */}
-          {!escaneando && !error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          {estado === "cargando" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
               <div className="text-white text-center">
                 <div className="text-3xl mb-2 animate-pulse">📷</div>
                 <p className="text-sm">Iniciando cámara...</p>
@@ -118,24 +145,19 @@ export default function EscanerCodigo({ onDetected, onCerrar }: Props) {
             </div>
           )}
 
-          {/* Error */}
-          {error && (
+          {estado === "error" && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 p-4">
               <div className="text-center">
                 <div className="text-3xl mb-3">⚠️</div>
-                <p className="text-white text-sm leading-relaxed">{error}</p>
+                <p className="text-white text-sm leading-relaxed">{errorMsg}</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
         <div className="px-4 py-3">
-          {error ? (
-            <button
-              onClick={onCerrar}
-              className="w-full bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium"
-            >
+          {estado === "error" ? (
+            <button onClick={onCerrar} className="w-full bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium">
               Cerrar
             </button>
           ) : (
